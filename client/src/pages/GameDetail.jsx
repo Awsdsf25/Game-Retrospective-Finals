@@ -77,6 +77,7 @@ const GameDetail = () => {
   const [showOtherRankings, setShowOtherRankings] = useState(false);
   const [retrospectives, setRetrospectives] = useState([]);
   const [isLoadingRetros, setIsLoadingRetros] = useState(true);
+  const [saveMessage, setSaveMessage] = useState({ text: "", type: "" });
 
   const fallbackGame = getSampleGameById(id);
   const currentGame = normalizeGame(
@@ -93,25 +94,13 @@ const GameDetail = () => {
   };
   const isEligible = currentYear - currentGame.releaseYear >= 5;
 
+  // 1. FETCH ALL RETROSPECTIVES (For global rankings & archive score)
   useEffect(() => {
     const fetchRetrospectives = async () => {
       setIsLoadingRetros(true);
       try {
         const response = await api.get(`/retrospectives?gameId=${id}`);
-        const fetchedRetros = response.data || [];
-        setRetrospectives(fetchedRetros);
-
-        const existing = fetchedRetros.find(
-          (retro) =>
-            retro.userId?._id === user?.id || retro.userId === user?.id,
-        );
-
-        if (existing) {
-          setMyReview(existing);
-          setUserScore(existing.score?.toString() || "");
-          setImpactScore(existing.impactScore?.toString() || 5);
-          setReviewText(existing.content || "");
-        }
+        setRetrospectives(response.data || []);
       } catch (err) {
         console.error("Failed to load retrospectives", err);
       } finally {
@@ -119,11 +108,31 @@ const GameDetail = () => {
       }
     };
 
-    if (user) {
+    if (id) {
       fetchRetrospectives();
     }
-  }, [id, user, refreshRetrospectives]);
+  }, [id, refreshRetrospectives]);
 
+  // 2. POPULATE USER'S FORM (Runs whenever user data or retrospectives finish loading)
+  useEffect(() => {
+    if (user && retrospectives.length > 0) {
+      const currentUserId = user.id || user._id;
+
+      const existing = retrospectives.find((retro) => {
+        const retroUserId = retro.userId?._id || retro.userId;
+        return String(retroUserId) === String(currentUserId);
+      });
+
+      if (existing) {
+        setMyReview(existing);
+        setUserScore(existing.score?.toString() || "");
+        setImpactScore(existing.impactScore?.toString() || 5);
+        setReviewText(existing.content || "");
+      }
+    }
+  }, [user, retrospectives]);
+
+  // 3. FETCH GAME DETAILS
   useEffect(() => {
     const fetchGameDetails = async () => {
       setIsLoadingGame(true);
@@ -171,9 +180,16 @@ const GameDetail = () => {
       content: reviewText || "Rated without written commentary.",
       score: Number(userScore),
       impactScore: Number(impactScore),
+      gameTitle: currentGame.title,
+      gameCoverImage: currentGame.coverImage,
+      gameReleaseDate: currentGame.releaseYear
+        ? `${currentGame.releaseYear}-01-01`
+        : null,
+      status: "published",
     };
 
     try {
+      setSaveMessage({ text: "", type: "" });
       let response;
       if (myReview && myReview._id) {
         response = await api.put(`/retrospectives/${myReview._id}`, payload);
@@ -187,9 +203,17 @@ const GameDetail = () => {
         return [...remaining, savedRetro];
       });
       setShowOtherRankings(true);
+      setSaveMessage({
+        text: "Saved to archive successfully.",
+        type: "success",
+      });
       refreshRetrospectives();
     } catch (err) {
+      const message =
+        err?.response?.data?.message ||
+        "Failed to save retrospective. Please try again.";
       console.error("Failed to save retrospective", err);
+      setSaveMessage({ text: message, type: "error" });
     }
   };
 
@@ -310,6 +334,17 @@ const GameDetail = () => {
           </div>
         </div>
 
+        {myReview && (
+          <section style={styles.reviewSummaryCard}>
+            <h2 style={styles.sectionTitle}>Your Saved Review</h2>
+            <p style={styles.reviewSummaryText}>{myReview.content}</p>
+            <div style={styles.reviewSummaryFooter}>
+              <span>Score: {myReview.score}/100</span>
+              <span>Impact: {myReview.impactScore}/5</span>
+            </div>
+          </section>
+        )}
+
         {showOtherRankings && (
           <div style={styles.otherRankingsContainer}>
             <h3 style={styles.otherRankingsTitle}>
@@ -407,8 +442,19 @@ const GameDetail = () => {
               style={{ ...styles.submitBtn, opacity: userScore ? 1 : 0.5 }}
               disabled={!userScore}
             >
-              Save to Archive
+              {myReview ? "Update Retrospective" : "Publish Retrospective"}
             </button>
+            {saveMessage.text && (
+              <p
+                style={{
+                  marginTop: "12px",
+                  color: saveMessage.type === "success" ? "#10B981" : "#EF4444",
+                  fontSize: "14px",
+                }}
+              >
+                {saveMessage.text}
+              </p>
+            )}
           </form>
         </section>
       </main>
@@ -599,6 +645,27 @@ const styles = {
     padding: "4px 8px",
     borderRadius: "6px",
     fontSize: "12px",
+  },
+  reviewSummaryCard: {
+    marginTop: "24px",
+    padding: "24px",
+    borderRadius: "20px",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  reviewSummaryText: {
+    marginTop: "16px",
+    lineHeight: 1.8,
+    color: "#d7d0e0",
+    whiteSpace: "pre-wrap",
+  },
+  reviewSummaryFooter: {
+    marginTop: "18px",
+    display: "flex",
+    gap: "18px",
+    flexWrap: "wrap",
+    fontWeight: 600,
+    color: "#e7e0ed",
   },
   section: {
     marginTop: "32px",

@@ -85,25 +85,29 @@ const Rankings = () => {
               ) : (
                 rankedGames.map((retro, index) => {
                   const score = Number(retro.score) / 10;
+                  const gameTitle =
+                    retro.gameTitle || retro.gameId?.title || "Untitled Game";
+                  const gameYear = retro.gameReleaseDate
+                    ? new Date(retro.gameReleaseDate).getFullYear()
+                    : retro.gameId?.releaseDate
+                      ? new Date(retro.gameId.releaseDate).getFullYear()
+                      : "";
+
                   return (
                     <tr key={retro._id} style={styles.tableRow}>
                       <td style={styles.tdRank}>#{index + 1}</td>
                       <td style={styles.tdTitle}>
                         <Link
-                          to={`/game/${retro.gameId?._id || ""}`}
+                          to={`/game/${retro.gameId || ""}`}
                           style={{
                             color: "#e7e0ed",
                             textDecoration: "none",
                             fontWeight: 600,
                           }}
                         >
-                          {retro.gameId?.title || "Untitled Game"}
+                          {gameTitle}
                         </Link>
-                        <span style={styles.developerSubtext}>
-                          {retro.gameId?.releaseDate
-                            ? new Date(retro.gameId.releaseDate).getFullYear()
-                            : ""}
-                        </span>
+                        <span style={styles.developerSubtext}>{gameYear}</span>
                       </td>
                       <td style={styles.tdCenter}>
                         <span style={styles.impactBadge}>

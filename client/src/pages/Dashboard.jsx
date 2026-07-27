@@ -6,13 +6,18 @@ import { AuthContext } from "../context/AuthContext";
 import { sampleGames } from "../data/sampleGames";
 
 const Dashboard = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, retrosVersion } = useContext(AuthContext);
   const navigate = useNavigate();
   const [hoveredCard, setHoveredCard] = useState(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [topGames, setTopGames] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userRetros, setUserRetros] = useState([]);
+  const [isLoadingRetros, setIsLoadingRetros] = useState(true);
+  const [allPublishedRetros, setAllPublishedRetros] = useState([]);
+  const [isLoadingPublishedRetros, setIsLoadingPublishedRetros] =
+    useState(true);
 
   const currentYear = new Date().getFullYear();
 
@@ -37,6 +42,39 @@ const Dashboard = () => {
     fetchGames();
   }, []);
 
+  useEffect(() => {
+    const fetchUserRetros = async () => {
+      if (!user) return;
+      setIsLoadingRetros(true);
+      try {
+        const response = await api.get(`/retrospectives?userId=${user.id}`);
+        setUserRetros(response.data || []);
+      } catch (err) {
+        console.error("Failed to load user retrospectives", err);
+      } finally {
+        setIsLoadingRetros(false);
+      }
+    };
+
+    fetchUserRetros();
+  }, [user, retrosVersion]);
+
+  useEffect(() => {
+    const fetchPublishedRetros = async () => {
+      setIsLoadingPublishedRetros(true);
+      try {
+        const response = await api.get("/retrospectives?status=published");
+        setAllPublishedRetros(response.data || []);
+      } catch (err) {
+        console.error("Failed to load published retrospectives", err);
+      } finally {
+        setIsLoadingPublishedRetros(false);
+      }
+    };
+
+    fetchPublishedRetros();
+  }, [retrosVersion]);
+
   const filteredGames = topGames.filter((game) => {
     const title = game.title || "";
     return title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -59,7 +97,20 @@ const Dashboard = () => {
         };
   };
 
-  const normalizeGame = (game) => {
+  const reviewLookup = new Map(
+    userRetros.map((retro) => [String(retro.gameId), retro]),
+  );
+
+  const publishedStats = new Map();
+  allPublishedRetros.forEach((retro) => {
+    const gameId = String(retro.gameId);
+    const existing = publishedStats.get(gameId) || { sum: 0, count: 0 };
+    existing.sum += Number(retro.score || 0);
+    existing.count += 1;
+    publishedStats.set(gameId, existing);
+  });
+
+  const normalizeGame = (game, statsMap) => {
     const title = game.title || game.name || "Untitled Title";
     const rawReleaseDate =
       game.releaseDate ||
@@ -90,18 +141,38 @@ const Dashboard = () => {
           ? game.genres.map((item) => item.name || item).filter(Boolean)
           : [];
 
+    const gameId = String(game._id || game.id || game.name || title);
+    const review = reviewLookup.get(gameId);
+    const aggregate = statsMap.get(gameId);
+    const avgScore = aggregate
+      ? Math.round(aggregate.sum / Math.max(1, aggregate.count))
+      : 0;
+
+    const snippet = review?.content
+      ? review.content.length > 100
+        ? `${review.content.slice(0, 100)}...`
+        : review.content
+      : "";
+
     return {
-      id: game._id || game.id || game.name || title,
+      id: gameId,
       title,
       developer: genres.length > 0 ? genres.join(", ") : "Archive",
       releaseYear,
       tags: genres.length > 0 ? genres.slice(0, 2) : ["Archive"],
       image: coverImage,
-      score: 0,
+      score: review?.score || 0,
+      reviewImpact: review?.impactScore || 0,
+      isWritten: Boolean(review),
+      avgScore,
+      avgCount: aggregate ? aggregate.count : 0,
+      reviewSnippet: snippet,
     };
   };
 
-  const displayGames = filteredGames.map(normalizeGame);
+  const displayGames = filteredGames.map((game) =>
+    normalizeGame(game, publishedStats),
+  );
   if (!user) {
     return (
       <div style={styles.pageContainer}>
@@ -274,6 +345,28 @@ const Dashboard = () => {
                       </div>
                       <h2 style={styles.cardTitle}>{game.title}</h2>
                       <p style={styles.cardDeveloper}>{game.developer}</p>
+                      {game.isWritten && (
+                        <div style={styles.writingSection}>
+                          <span style={styles.writingBadge}>Writing</span>
+                          <span style={styles.reviewScoreLabel}>
+                            {game.score} / 100
+                          </span>
+                          <span style={styles.reviewImpactLabel}>
+                            Impact: {game.reviewImpact}/5
+                          </span>
+                        </div>
+                      )}
+                      {game.reviewSnippet && (
+                        <p style={styles.reviewSnippet}>{game.reviewSnippet}</p>
+                      )}
+                      {game.avgScore > 0 && (
+                        <div style={styles.avgRow}>
+                          <span style={styles.avgLabel}>Average rating</span>
+                          <span style={styles.avgValue}>
+                            {game.avgScore}/100
+                          </span>
+                        </div>
+                      )}
                       <div
                         style={{
                           ...styles.eligibilityBadge,
@@ -516,6 +609,72 @@ const styles = {
     borderRadius: "6px",
     display: "inline-block",
     textAlign: "center",
+  },
+  writingSection: {
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: "10px",
+  },
+  writingBadge: {
+    backgroundColor: "#d0bcff",
+    color: "#15121b",
+    padding: "4px 8px",
+    borderRadius: "999px",
+    fontSize: "11px",
+    fontWeight: 700,
+  },
+  reviewScoreLabel: {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: "#e7e0ed",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    padding: "4px 8px",
+    borderRadius: "6px",
+  },
+  reviewImpactLabel: {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: "#e7e0ed",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    padding: "4px 8px",
+    borderRadius: "6px",
+  },
+  avgRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "10px",
+    padding: "10px 12px",
+    borderRadius: "12px",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  avgLabel: {
+    fontSize: "12px",
+    color: "#cbc3d7",
+    fontWeight: 600,
+  },
+  avgValue: {
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#d0bcff",
+  },
+  reviewSnippet: {
+    fontSize: "13px",
+    lineHeight: 1.6,
+    color: "#cbc3d7",
+    marginTop: "12px",
+    marginBottom: "12px",
+  },
+  reviewImpactLabel: {
+    fontSize: "12px",
+    fontWeight: 600,
+    color: "#e7e0ed",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    padding: "4px 8px",
+    borderRadius: "6px",
   },
 };
 

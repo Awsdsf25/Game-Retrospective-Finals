@@ -17,6 +17,20 @@ const CreateRetrospective = () => {
   const [success, setSuccess] = useState("");
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const checkExisting = async () => {
+      try {
+        const res = await api.get("/retrospectives/my");
+        if (res.data) {
+          navigate(`/game/${res.data.gameId}`);
+        }
+      } catch {
+        // No existing retrospective — show the form
+      }
+    };
+    checkExisting();
+  }, [navigate]);
+
   // Fetch only games that are 5+ years old
   useEffect(() => {
     const fetchEligibleGames = async () => {

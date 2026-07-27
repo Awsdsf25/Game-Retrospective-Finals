@@ -4,37 +4,86 @@ const Retrospective = require("../models/Retrospective");
 const Game = require("../models/Game");
 const auth = require("../middleware/auth");
 
-// 1. CREATE RETROSPECTIVE (Draft Status - Checks 5-Year Rule)
+// 1. CREATE OR UPDATE RETROSPECTIVE (Allows one per game, per user)
 router.post("/", auth, async (req, res) => {
   try {
-    const { gameId, title, content, score, impactScore, status } = req.body;
-
-    // Verify game existence
-    const game = await Game.findById(gameId);
-    if (!game) {
-      return res.status(404).json({ message: "Game not found." });
-    }
-
-    // ENFORCE 5-YEAR RULE
-    if (!game.isEligibleForRetrospective()) {
-      return res.status(400).json({
-        message:
-          "Ineligible: Retrospectives can only be created for games released at least 5 years ago.",
-      });
-    }
-
-    const retrospective = new Retrospective({
+    const {
       gameId,
-      userId: req.user.id,
       title,
       content,
       score,
       impactScore,
-      status: status || "draft",
-    });
+      status,
+      gameTitle,
+      gameCoverImage,
+      gameReleaseDate,
+    } = req.body;
 
-    await retrospective.save();
-    res.status(201).json(retrospective);
+    if (!gameId || !gameTitle) {
+      return res.status(400).json({
+        message: "Game ID and game title are required to save a retrospective.",
+      });
+    }
+
+    const scoreValue = Number(score);
+    const impactValue = Number(impactScore);
+
+    if (Number.isNaN(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+      return res
+        .status(400)
+        .json({ message: "Score must be a number between 0 and 100." });
+    }
+
+    if (Number.isNaN(impactValue) || impactValue < 1 || impactValue > 5) {
+      return res
+        .status(400)
+        .json({ message: "Impact score must be between 1 and 5." });
+    }
+
+    // Identify the specific retrospective by User AND Game
+    const searchCriteria = {
+      gameId: String(gameId),
+      userId: req.user.id,
+    };
+
+    const updateFields = {
+      gameTitle,
+      gameCoverImage: gameCoverImage || "",
+      gameReleaseDate: gameReleaseDate ? new Date(gameReleaseDate) : undefined,
+      title: title || `${gameTitle} Retrospective`,
+      content: content || "Draft content...", // Fallback in case frontend sends empty content
+      score: scoreValue,
+      impactScore: impactValue,
+      status: status || "published",
+    };
+
+    const retrospective = await Retrospective.findOneAndUpdate(
+      searchCriteria,
+      { $set: updateFields },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+        runValidators: true,
+      },
+    );
+
+    res.status(200).json(retrospective);
+  } catch (err) {
+    console.error("🚨 BACKEND SAVE ERROR:", err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// 1b. GET MY RETROSPECTIVES (Updated to return all retros for the user)
+router.get("/my", auth, async (req, res) => {
+  try {
+    const retros = await Retrospective.find({ userId: req.user.id }).sort({
+      createdAt: -1,
+    });
+    if (!retros || retros.length === 0)
+      return res.status(404).json({ message: "No retrospectives found." });
+    res.json(retros);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -48,10 +97,9 @@ router.get("/", async (req, res) => {
 
     if (status) filter.status = status;
     if (userId) filter.userId = userId;
-    if (gameId) filter.gameId = gameId;
+    if (gameId) filter.gameId = String(gameId);
 
     const retrospectives = await Retrospective.find(filter)
-      .populate("gameId", "title releaseDate coverImage")
       .populate("userId", "username email userType")
       .sort({ createdAt: -1 });
 
@@ -65,7 +113,6 @@ router.get("/", async (req, res) => {
 router.get("/panels/best", async (req, res) => {
   try {
     const topRetros = await Retrospective.find({ status: "published" })
-      .populate("gameId", "title releaseDate coverImage")
       .populate("userId", "username")
       .sort({ score: -1 })
       .limit(10);
@@ -79,9 +126,10 @@ router.get("/panels/best", async (req, res) => {
 // 4. GET SINGLE RETROSPECTIVE BY ID
 router.get("/:id", async (req, res) => {
   try {
-    const retro = await Retrospective.findById(req.params.id)
-      .populate("gameId")
-      .populate("userId", "username email userType");
+    const retro = await Retrospective.findById(req.params.id).populate(
+      "userId",
+      "username email userType",
+    );
 
     if (!retro)
       return res.status(404).json({ message: "Retrospective not found." });

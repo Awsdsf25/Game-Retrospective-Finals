@@ -3,10 +3,12 @@ const mongoose = require("mongoose");
 const retrospectiveSchema = new mongoose.Schema(
   {
     gameId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Game",
+      type: String,
       required: true,
     },
+    gameTitle: { type: String, required: true, trim: true },
+    gameCoverImage: { type: String, default: "" },
+    gameReleaseDate: { type: Date },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -25,5 +27,7 @@ const retrospectiveSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+retrospectiveSchema.index({ gameId: 1, userId: 1 }, { unique: true });
 
 module.exports = mongoose.model("Retrospective", retrospectiveSchema);

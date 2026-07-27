@@ -13,6 +13,15 @@ const Profile = () => {
     bio: "",
     imageUrl: "",
   });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordMessage, setPasswordMessage] = useState({
+    text: "",
+    type: "",
+  });
   const [retrospectives, setRetrospectives] = useState([]);
   const [isLoadingRetros, setIsLoadingRetros] = useState(true);
 
@@ -46,14 +55,61 @@ const Profile = () => {
     fetchRetrospectives();
   }, [user, retrosVersion]);
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    updateProfile(profileData);
+    await updateProfile(profileData);
     setIsEditing(false);
   };
 
   const handleChange = (e) => {
     setProfileData({ ...profileData, [e.target.name]: e.target.value });
+  };
+
+  const handlePasswordChangeInput = (e) => {
+    setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordMessage({ text: "", type: "" });
+
+    if (!passwordData.currentPassword || !passwordData.newPassword) {
+      setPasswordMessage({
+        text: "Please fill in both current and new password fields.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordMessage({
+        text: "New password and confirmation do not match.",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      const response = await api.put("/auth/password", {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+
+      setPasswordMessage({
+        text: response.data.message || "Password updated successfully.",
+        type: "success",
+      });
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (err) {
+      const message =
+        err?.response?.data?.message ||
+        "Unable to change password. Please try again.";
+      setPasswordMessage({ text: message, type: "error" });
+    }
   };
 
   if (!user) {
@@ -185,6 +241,69 @@ const Profile = () => {
                   </div>
                 </form>
               )}
+
+              <div style={{ marginTop: "32px" }}>
+                <h3 style={styles.sectionTitle}>Change Password</h3>
+                <form onSubmit={handleChangePassword}>
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Current Password</label>
+                    <input
+                      type="password"
+                      name="currentPassword"
+                      value={passwordData.currentPassword}
+                      onChange={handlePasswordChangeInput}
+                      style={styles.input}
+                      placeholder="Enter current password"
+                    />
+                  </div>
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>New Password</label>
+                    <input
+                      type="password"
+                      name="newPassword"
+                      value={passwordData.newPassword}
+                      onChange={handlePasswordChangeInput}
+                      style={styles.input}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Confirm Password</label>
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      value={passwordData.confirmPassword}
+                      onChange={handlePasswordChangeInput}
+                      style={styles.input}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                  {passwordMessage.text && (
+                    <p
+                      style={{
+                        marginTop: "8px",
+                        color:
+                          passwordMessage.type === "success"
+                            ? "#10B981"
+                            : "#EF4444",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {passwordMessage.text}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    style={{
+                      ...styles.saveBtn,
+                      width: "100%",
+                      marginTop: "12px",
+                    }}
+                  >
+                    Update Password
+                  </button>
+                </form>
+              </div>
             </div>
           </section>
 
@@ -201,7 +320,7 @@ const Profile = () => {
               <div style={styles.retroGrid}>
                 {retrospectives.map((retro) => (
                   <Link
-                    to={`/game/${retro.gameId?._id || retro.gameId}`}
+                    to={`/game/${retro.gameId}`}
                     key={retro._id}
                     style={{ textDecoration: "none" }}
                   >
@@ -209,16 +328,23 @@ const Profile = () => {
                       <div style={styles.retroImageContainer}>
                         <img
                           src={
+                            retro.gameCoverImage ||
                             retro.gameId?.coverImage ||
                             "https://via.placeholder.com/100x150?text=Game"
                           }
-                          alt={retro.gameId?.title || "Retrospective"}
+                          alt={
+                            retro.gameTitle ||
+                            retro.gameId?.title ||
+                            "Retrospective"
+                          }
                           style={styles.retroImage}
                         />
                       </div>
                       <div style={styles.retroInfo}>
                         <h3 style={styles.retroTitle}>
-                          {retro.gameId?.title || retro.title}
+                          {retro.gameTitle ||
+                            retro.gameId?.title ||
+                            retro.title}
                         </h3>
                         <p style={styles.retroDate}>
                           Logged on{" "}

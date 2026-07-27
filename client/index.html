@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuestLog | The Archive of Legend</title>
+
+    <!-- Google Fonts & Material Symbols -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CSS (CDN for immediate integration) & Custom Config -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#d0bcff",
+              "on-primary": "#3c0091",
+              surface: "#15121b",
+              "surface-variant": "#37333d",
+              "surface-container-lowest": "#0f0d15",
+              "surface-container-low": "#1d1a23",
+              "surface-container-high": "#2c2832",
+              outline: "#958ea0",
+              "outline-variant": "#494454",
+              "on-surface": "#e7e0ed",
+              "on-surface-variant": "#cbc3d7",
+              secondary: "#4edea3",
+              tertiary: "#ffb95f",
+              background: "#121212",
+            },
+            fontFamily: {
+              display: ["Montserrat"],
+              "body-md": ["Inter"],
+              "label-sm": ["Inter"],
+              "label-md": ["Inter"],
+              "headline-md": ["Montserrat"],
+              "headline-lg": ["Montserrat"],
+            },
+            spacing: {
+              xs: "4px",
+              sm: "12px",
+              base: "8px",
+              md: "24px",
+              lg: "40px",
+              xl: "64px",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="bg-[#121212] text-[#e7e0ed] min-h-screen font-body-md selection:bg-primary/30"
+  >
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
